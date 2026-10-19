@@ -28,7 +28,7 @@ jobs:
         run: python models.py
 
       - name: Run Unit Tests
-        run: pytest tests/
+        run: python -m pytest tests/
 
   sast-scan:
     name: SAST Scan (Bandit)
