@@ -1,0 +1,63 @@
+name: DevSecOps Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Initialize Database
+        run: python models.py
+
+      - name: Run Unit Tests
+        run: pytest tests/
+
+  sast-scan:
+    name: SAST Scan (Bandit)
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install Bandit SAST
+        run: pip install bandit
+
+      - name: Run Bandit Scan
+        # --exit-zero memastikan workflow lanjut ke tahap Quality Gate tanpa langsung gagal
+        run: bandit -r . -f json -o bandit-report.json --exit-zero
+
+      - name: Enforce Quality Gate
+        # Membaca hasil JSON. Jika ada kerentanan tingkat HIGH, gagalkan pipeline (exit 1).
+        run: |
+          HIGH_VULNS=$(grep -o '"SEVERITY.HIGH": [0-9]*' bandit-report.json | awk '{print $2}')
+          echo "Ditemukan $HIGH_VULNS kerentanan tingkat HIGH."
+          if [ "$HIGH_VULNS" -gt 0 ]; then
+            echo "Quality Gate GAGAL: Kode mengandung celah keamanan kritis!"
+            exit 1
+          else
+            echo "Quality Gate LULUS: Kode aman."
+          fi
